@@ -27,10 +27,11 @@ let amount;
 let color;
 
 let isBet = false;
+let countBet = 0;
 let percentage = 0.05;
 
 const sendMessageForMe = (type) => {
-  let message = `Blaze BOT: ${type}\n\n`;
+  let message = `BOT: ${type}\n\n`;
 
   message += `[WALLET] ----- R$ ${balance.toPrecision(4)}\n`;
   message += `[AMOUNT] ----- R$ ${amount.toPrecision(3)}`;
@@ -49,9 +50,11 @@ const checkColorFromGreen = (message, colorName) => {
   const green = colors[colors.length - 1] || "";
   const win = icon === green ? "✅" : "⛔️";
   console.log("[GREEN]", { win, green, colors });
+
+  return icon === green;
 };
 
-const updateBalanceFromApi = async (type) => {
+const updateBalanceFromApi = async () => {
   const wallet = await blaze.getWallet();
 
   if (wallet) {
@@ -61,75 +64,83 @@ const updateBalanceFromApi = async (type) => {
     console.log(`[WALLET] ----- R$ ${balance.toPrecision(4)}`);
     console.log(`[AMOUNT] ----- R$ ${amount.toPrecision(3)}`);
   }
+
+  if (amount < 2) finishBot();
 };
 
 const extractColorFromMessage = (message) => {
   const msgs = message.split("\n");
   console.log(msgs);
 
-  let enter, protect;
+  const enter = msgs.length > 0 ? msgs[1].split(" ").reverse()[0] : null;
 
-  if (msgs.length > 0) {
-    enter = msgs[1].split(" ").reverse()[0];
-    const i = msgs.length === 5 ? 3 : 2;
-    protect = msgs[i].split(" ").reverse()[0];
+  return enter;
+};
+
+const doCheckTypeForBetGaleLoss = async (message) => {
+  const msgUpper = message.toUpperCase();
+
+  console.log("\n---------------------");
+  if (msgUpper.includes("ENTRADA CONFIRMADA")) {
+    color = extractColorFromMessage(message);
+    if (!color) return;
+
+    // Realizando aposta
+    console.log(`[BET] Realizando aposta de R$ ${amount} em ${color}`);
+    console.log(`[WALLET] R$ ${balance}`);
+    const status = await blaze.executeBet(amount, color);
+    if (status) {
+      balance -= amount; //Atualiza o saldo subtraindo o valor apostado
+      isBet = true;
+    } else {
+      isBet = false;
+    }
+  } else if (isBet && msgUpper.includes("GREEN")) {
+    const green = checkColorFromGreen(message, color);
+    color = null;
+    isBet = false;
+    await updateBalanceFromApi();
+    if (green) {
+      countBet += 1;
+      sendMessageForMe("GREEN ✅✅✅");
+    }
+  } else if (isBet && msgUpper.includes("GALE")) {
+    amount = amount * 2; // Dobra o valor da aposta
+
+    // Refazendo a aposta dobrando o valor
+    console.log(`[GALE] Refazendo aposta com R$ ${amount} em ${color}`);
+    console.log(`[WALLET] R$ ${balance}`);
+
+    const status = await blaze.executeBet(amount, color, true);
+    if (status) {
+      balance -= amount;
+      isBet = true;
+    } else {
+      await updateBalanceFromApi();
+    }
+  } else if (isBet && msgUpper.includes("LOSS")) {
+    console.log(`[LOSS] wallet: R$ ${balance}`);
+    await updateBalanceFromApi();
+    await sendMessageForMe("LOSS ⛔️⛔️⛔️");
+    finishBot();
+  } else {
+    console.log(`[MESSAGE] ${message}`);
   }
-
-  return { enter, protect };
 };
 
 const handleMessageFromBlazeChannel = async (e) => {
   const { peerId, message } = e.message;
 
   if (peerId && peerId.channelId && peerId.channelId.value === blazeChannelId) {
-    const msgUpper = message.toUpperCase();
-
-    console.log("\n---------------------");
-    if (msgUpper.includes("ENTRADA CONFIRMADA")) {
-      const { enter } = extractColorFromMessage(message);
-      color = enter;
-      if (!color) return;
-
-      // Realizando aposta
-      console.log(`[BET] Realizando aposta de R$ ${amount} em ${color}`);
-      console.log(`[WALLET] R$ ${balance}`);
-      const status = await blaze.executeBet(amount, color);
-      if (status) {
-        balance -= amount; //Atualiza o saldo subtraindo o valor apostado
-        isBet = true;
-      } else {
-        isBet = false;
-      }
-    } else if (isBet && msgUpper.includes("GREEN")) {
-      checkColorFromGreen(message, color);
-      color = null;
-      isBet = false;
-      await updateBalanceFromApi();
-      await sendMessageForMe("GREEN");
-    } else if (isBet && msgUpper.includes("GALE")) {
-      amount = amount * 2; // Dobra o valor da aposta
-
-      // Refazendo a aposta dobrando o valor
-      console.log(`[GALE] Refazendo aposta com R$ ${amount} em ${color}`);
-      console.log(`[WALLET] R$ ${balance}`);
-
-      const status = await blaze.executeBet(amount, color, true);
-      if (status) {
-        balance -= amount;
-        isBet = true;
-      } else {
-        await updateBalanceFromApi();
-      }
-    } else if (isBet && msgUpper.includes("LOSS")) {
-      console.log(`[LOSS] wallet: R$ ${balance}`);
-      await updateBalanceFromApi();
-      await sendMessageForMe("[LOSS]");
-      finishBot();
+    // Do check type message for bet or gale or loss
+    if (countBet < 5) {
+      doCheckTypeForBetGaleLoss(message);
     } else {
-      console.log(`[MESSAGE] ${message}`);
+      console.log("[5 BETS] -------- Bot finalizado");
+      finishBot();
     }
 
-    // Write messages
+    // Write messages receives
     const lineBreak = "\n------------------------------\n";
     fileStream.write(`${date.toJSON()}\n${message} ${lineBreak}`);
   }
@@ -140,11 +151,11 @@ const run = async () => {
 
   await client.connect();
 
-  console.log(`Iniciando BOT`);
+  console.log(`Iniciando BOT ⚫️🔴⚪✅💰⛔️`);
 
   await updateBalanceFromApi();
 
-  await sendMessageForMe("START");
+  //await sendMessageForMe("START");
 
   client.addEventHandler(handleMessageFromBlazeChannel, new NewMessage({}));
 };
