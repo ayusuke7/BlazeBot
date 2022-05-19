@@ -56,6 +56,30 @@ const login = async () => {
   }
 };
 
+const getStatsBets = async () => {
+  try {
+    const { data } = await api.get(`${baseUrl}/roulette_games/current`);
+    const bets = data?.bets || [];
+
+    const group = bets.reduce((acum, item) => {
+      const key = ICONS[item.color];
+      const obj = acum[key] ?? { sum: 0, amount: 0 };
+      obj.sum = obj.sum + 1;
+      obj.amount = obj.amount + item.amount;
+      obj.media = (obj.amount / obj.sum).toPrecision(4);
+      acum[key] = obj;
+      return acum;
+    }, {});
+
+    return {
+      total: bets.length,
+      bets: group,
+    };
+  } catch (error) {
+    console.log("Erro ao Buscar Status");
+  }
+};
+
 const getStatusRoulette = async () => {
   try {
     const { data } = await api.get(`${baseUrl}/roulette_games/current`);
@@ -69,7 +93,6 @@ const getStatusRoulette = async () => {
     return res;
   } catch (error) {
     console.log("Erro ao Buscar Status");
-    createlog(error);
   }
 };
 
@@ -93,10 +116,14 @@ const getWallet = async () => {
 };
 
 const protectWhite = async (amount) => {
-  const precision = amount >= 10 ? 4 : 3;
-  const value = amount.toPrecision(precision);
+  let value = "2.00";
+
+  if (amount) {
+    value = amount.toPrecision(amount >= 10 ? 4 : 3);
+  }
 
   try {
+    console.log("[PROTEGENDO O BRANCO]", value);
     await api.post(`${baseUrl}/roulette_bets`, {
       color: 0,
       amount: value,
@@ -104,9 +131,28 @@ const protectWhite = async (amount) => {
       wallet_id: 29206686,
       currency_type: "BRL",
     });
-    console.log("[PROTEGENDO O BRANCO]", value);
   } catch (error) {
-    console.log("[ERROR] Erro ao Proteger o Branco");
+    console.log("[ERROR] Erro ao proteger o Branco");
+    createLog(error);
+  }
+};
+
+const sendRouleteBet = async (amount, color) => {
+  const { number } = COLORS.find((c) => c.name == color);
+
+  const payload = {
+    color: number,
+    amount: amount.toPrecision(amount >= 10 ? 4 : 3),
+    currency_type: "BRL",
+    free_bet: false,
+    wallet_id: 29206686,
+  };
+
+  try {
+    await api.post(`${baseUrl}/roulette_bets`, payload);
+    console.log("APOSTA ENVIADA", payload.amount, color);
+  } catch (error) {
+    console.log("[ERROR] Erro ao realizar Aposta");
     createLog(error);
   }
 };
@@ -116,27 +162,16 @@ const executeBet = async (amount, color, isGale = false) => {
   const res = await getStatusRoulette();
 
   if (res && res.status === "waiting") {
-    const precision = amount >= 10 ? 4 : 3;
-    try {
-      const payload = {
-        color: COLORS.find((c) => c.name == color).number,
-        amount: amount.toPrecision(precision),
-        currency_type: "BRL",
-        free_bet: false,
-        wallet_id: 29206686,
-      };
-
-      await api.post(`${baseUrl}/roulette_bets`, payload);
-      console.log("[APOSTA ENVIADA]", payload.amount, payload.color);
-      return res;
-    } catch (error) {
-      console.log("[ERROR] Erro ao Realizar Aposta");
-      createLog(error);
-    }
-  } else if (isGale) {
+    // Faz aposta protegendo o branco
+    if (isGale) await protectWhite();
+    await sendRouleteBet(amount, color);
+    return res;
+  } else if (isGale || res.status === "complete") {
     return executeBet(amount, color, isGale);
   } else {
-    console.log("[STATUS] Não foi possivel enviar Aposta: ", res.status);
+    console.log("[STATUS] Não foi possivel enviar Aposta: ", {
+      status: res.status,
+    });
   }
 };
 
@@ -150,6 +185,7 @@ module.exports = {
   getMe,
   getStatusRoulette,
   protectWhite,
+  getStatsBets,
   ICONS,
   COLORS,
 };
