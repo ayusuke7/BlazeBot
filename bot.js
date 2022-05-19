@@ -18,16 +18,17 @@ const client = new TelegramClient(session, apiId, apiHash, {
   connectionRetries: 5,
 });
 
-const fileStream = fs.createWriteStream("messages.txt", {
-  flags: "a",
-});
+const fileStream = fs.createWriteStream("messages.txt", { flags: "a" });
 
 let balance;
 let amount;
 let color;
 
 let isBet = false;
+let isGale = false;
+
 let countBet = 0;
+let limitBet = 5;
 let percentage = 0.05;
 
 const sendMessageForMe = (type) => {
@@ -39,7 +40,9 @@ const sendMessageForMe = (type) => {
   return client.sendMessage("me", { message });
 };
 
-const finishBot = () => {
+const finishBot = (message) => {
+  if (message) console.log(`[BOT STOP] ${message}`);
+
   fileStream.end();
   process.exit(1);
 };
@@ -65,7 +68,7 @@ const updateBalanceFromApi = async () => {
     console.log(`[AMOUNT] ----- R$ ${amount.toPrecision(3)}`);
   }
 
-  if (amount < 2) finishBot();
+  if (amount < 2) finishBot("Amount minímo");
 };
 
 const extractColorFromMessage = (message) => {
@@ -80,7 +83,6 @@ const extractColorFromMessage = (message) => {
 const doCheckTypeForBetGaleLoss = async (message) => {
   const msgUpper = message.toUpperCase();
 
-  console.log("\n---------------------");
   if (msgUpper.includes("ENTRADA CONFIRMADA")) {
     color = extractColorFromMessage(message);
     if (!color) return;
@@ -99,11 +101,11 @@ const doCheckTypeForBetGaleLoss = async (message) => {
     const green = checkColorFromGreen(message, color);
     color = null;
     isBet = false;
+
+    if (green) countBet += 1;
+
     await updateBalanceFromApi();
-    if (green) {
-      countBet += 1;
-      sendMessageForMe("GREEN ✅✅✅");
-    }
+    sendMessageForMe(green ? "GREEN ✅✅✅" : "BRANCO ⚪⚪⚪");
   } else if (isBet && msgUpper.includes("GALE")) {
     amount = amount * 2; // Dobra o valor da aposta
 
@@ -112,6 +114,7 @@ const doCheckTypeForBetGaleLoss = async (message) => {
     console.log(`[WALLET] R$ ${balance}`);
 
     const status = await blaze.executeBet(amount, color, true);
+
     if (status) {
       balance -= amount;
       isBet = true;
@@ -121,24 +124,19 @@ const doCheckTypeForBetGaleLoss = async (message) => {
   } else if (isBet && msgUpper.includes("LOSS")) {
     console.log(`[LOSS] wallet: R$ ${balance}`);
     await updateBalanceFromApi();
-    await sendMessageForMe("LOSS ⛔️⛔️⛔️");
+    sendMessageForMe("LOSS ⛔️⛔️⛔️");
     finishBot();
   } else {
     console.log(`[MESSAGE] ${message}`);
   }
 };
 
-const handleMessageFromBlazeChannel = async (e) => {
+const eventHandleMessageFromBlazeChannel = async (e) => {
   const { peerId, message } = e.message;
 
-  if (peerId && peerId.channelId && peerId.channelId.value === blazeChannelId) {
+  if (peerId?.channelId?.value === blazeChannelId) {
     // Do check type message for bet or gale or loss
-    if (countBet < 5) {
-      doCheckTypeForBetGaleLoss(message);
-    } else {
-      console.log("[5 BETS] -------- Bot finalizado");
-      finishBot();
-    }
+    doCheckTypeForBetGaleLoss(message);
 
     // Write messages receives
     const lineBreak = "\n------------------------------\n";
@@ -155,9 +153,10 @@ const run = async () => {
 
   await updateBalanceFromApi();
 
-  //await sendMessageForMe("START");
-
-  client.addEventHandler(handleMessageFromBlazeChannel, new NewMessage({}));
+  client.addEventHandler(
+    eventHandleMessageFromBlazeChannel,
+    new NewMessage({})
+  );
 };
 
 (async () => {
@@ -193,8 +192,10 @@ const run = async () => {
       console.log(wall);
       break;
     case 3:
-      const me = await blaze.getMe();
-      console.log(me);
+      setInterval(async () => {
+        const status = await blaze.getStatusRoulette();
+        console.log(status);
+      }, 1000);
       break;
     default:
       break;

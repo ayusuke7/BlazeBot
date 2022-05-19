@@ -3,7 +3,6 @@ const axios = require("axios").default;
 
 let token;
 let baseUrl = "https://blaze.com/api";
-let countGale = 0;
 
 const date = new Date();
 const ICONS = ["⚪", "🔴", "⚫️"];
@@ -61,8 +60,8 @@ const getStatusRoulette = async () => {
   try {
     const { data } = await api.get(`${baseUrl}/roulette_games/current`);
     const res = {
-      color: data.color,
       status: data.status,
+      color: data.color,
     };
     if (res.color != null) {
       res.color = COLORS.find((c) => c.number == res.color);
@@ -93,6 +92,25 @@ const getWallet = async () => {
   }
 };
 
+const protectWhite = async (amount) => {
+  const precision = amount >= 10 ? 4 : 3;
+  const value = amount.toPrecision(precision);
+
+  try {
+    await api.post(`${baseUrl}/roulette_bets`, {
+      color: 0,
+      amount: value,
+      free_bet: false,
+      wallet_id: 29206686,
+      currency_type: "BRL",
+    });
+    console.log("[PROTEGENDO O BRANCO]", value);
+  } catch (error) {
+    console.log("[ERROR] Erro ao Proteger o Branco");
+    createLog(error);
+  }
+};
+
 const executeBet = async (amount, color, isGale = false) => {
   console.log("[ENVIANDO APOSTA] ", { amount, color });
   const res = await getStatusRoulette();
@@ -107,8 +125,9 @@ const executeBet = async (amount, color, isGale = false) => {
         free_bet: false,
         wallet_id: 29206686,
       };
+
       await api.post(`${baseUrl}/roulette_bets`, payload);
-      console.log("[APOSTA ENVIADA] ", payload);
+      console.log("[APOSTA ENVIADA]", payload.amount, payload.color);
       return res;
     } catch (error) {
       console.log("[ERROR] Erro ao Realizar Aposta");
@@ -130,6 +149,7 @@ module.exports = {
   getWallet,
   getMe,
   getStatusRoulette,
+  protectWhite,
   ICONS,
   COLORS,
 };
