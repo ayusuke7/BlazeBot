@@ -27,13 +27,15 @@ let amount;
 let color;
 
 let isBet = false;
+let isLoss = false;
 
 let countBet = 0;
 let countGale = 0;
+let countGreen = 0;
+let countLoss = 0;
 
-let white = 2;
 let limitBet = 5;
-let percentage = 0.05;
+let percentage = 0.1;
 
 const sendMessageForMe = (type) => {
   let message = `BOT: ${type}\n\n`;
@@ -77,7 +79,7 @@ const updateBalanceFromApi = async () => {
 
   if (wallet) {
     balance = parseFloat(wallet.balance);
-    amount = 2; //Math.floor(balance * percentage);
+    amount = 4; //Math.floor(balance * percentage);
 
     console.log(`[WALLET] ----- R$ ${balance.toPrecision(4)}`);
     console.log(`[AMOUNT] ----- R$ ${amount.toPrecision(3)}`);
@@ -142,10 +144,27 @@ const doCheckTypeForBetGaleLoss = async (message) => {
     console.log(`[LOSS] ${time}`);
     await updateBalanceFromApi();
     await sendMessageForMe("LOSS ⛔️⛔️⛔️");
-    finishBot();
+    isLoss = true;
   } else {
     console.log(`[MESSAGE] ${time}:\n${message}`);
   }
+};
+
+const doCheckTypeWhileExitLoss = (message) => {
+  const typeMessage = checkTypeIsMessage(message);
+
+  if (typeMessage == "GREEN") {
+    countGreen += 1;
+  } else if (typeMessage == "LOSS") {
+    countLoss += 1;
+    countGreen = 0;
+  }
+
+  console.log(`[AWAIT FOR BET]: GREEN ${countGreen} / LOSS ${countLoss}`);
+  console.log(`[MESSAGE] ${time}:\n${message}`);
+
+  // Sai do AWAIT quando houver 5 greens seguidos
+  isLoss = !(countGreen == 3);
 };
 
 const eventHandleMessageFromBlazeChannel = async (e) => {
@@ -154,10 +173,11 @@ const eventHandleMessageFromBlazeChannel = async (e) => {
   if (peerId?.channelId?.value === blazeChannelId) {
     console.log("\n-----------------------");
 
-    // Do check type message for bet or gale or loss
-    //if (countBet === limitBet) finishBot();
-
-    doCheckTypeForBetGaleLoss(message);
+    if (isLoss) {
+      doCheckTypeWhileExitLoss(message);
+    } else {
+      doCheckTypeForBetGaleLoss(message);
+    }
 
     // Write messages receives
     const lineBreak = "\n------------------------------\n";

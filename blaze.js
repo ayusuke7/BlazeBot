@@ -163,10 +163,10 @@ const executeBet = async (amount, color, isGale = false) => {
 
   if (res && res.status === "waiting") {
     // Faz aposta protegendo o branco
-    if (isGale) await protectWhite();
+    //if (isGale) await protectWhite();
     await sendRouleteBet(amount, color);
     return res;
-  } else if (isGale || res.status === "complete") {
+  } else if (isGale || res?.status === "complete") {
     return executeBet(amount, color, isGale);
   } else {
     console.log("[STATUS] Não foi possivel enviar Aposta: ", {
