@@ -6,11 +6,11 @@ const fs = require("fs");
 const blaze = require("./blaze");
 const inquirer = require("inquirer");
 
-const apiId = 9921280;
-const blazeChannelId = 1676971024n;
-const apiHash = "54a6de5b1ab28cb5cb231cfaa0efbe04";
-const strSession =
-  "1AQAOMTQ5LjE1NC4xNzUuNTUBuxcl/k9geBY8nzliKkZSKrRMIfE3ZvarVFUvEGpL4aqW/1PFhptohlXldV/LyBK4mmclpq8lzLL74qNrmvtRpJ5F1PJlCRpFcosq0hkAKMufDs3SZ5v9cvhEl4SFZ+9Ocu9xYbBfCFUWFpoDS97As3w0O7Smrtj5rsoBYi496RJalg7+NGp//vf7VmFbY1k4w6WwaWa0PZqxfvVmtuZAOq84rbTwMospD/0Ie/7+TzZPc0hCTJnSBbOtyVzuVHnZoKTiivRVO8d8X0vMPuC8d+MRnYUvtzR36Y/rOSivtAzv0P654/i4J0cM7MLoYisDwADD5ihAvjA908yPgGvREpQ=";
+const apiId = 1234; // API Number Telegram
+const apiHash = "Api Hash Telegram";
+const strSession = "String Session Telegram";
+
+const blazeChannelId = 1676971024n; // ID Telegram Channel Blaze Bot
 
 const date = new Date();
 const time = date.toTimeString().substring(0, 8);
@@ -28,6 +28,7 @@ let color;
 
 let isBet = false;
 let isLoss = false;
+let isWatch = false;
 
 let countBet = 0;
 let countGale = 0;
@@ -79,7 +80,7 @@ const updateBalanceFromApi = async () => {
 
   if (wallet) {
     balance = parseFloat(wallet.balance);
-    amount = 4; //Math.floor(balance * percentage);
+    amount = 2; //Math.floor(balance * percentage);
 
     console.log(`[WALLET] ----- R$ ${balance.toPrecision(4)}`);
     console.log(`[AMOUNT] ----- R$ ${amount.toPrecision(3)}`);
@@ -173,6 +174,11 @@ const eventHandleMessageFromBlazeChannel = async (e) => {
   if (peerId?.channelId?.value === blazeChannelId) {
     console.log("\n-----------------------");
 
+    if (isWatch) {
+      console.log(`[WATCH] ${time}:\n${message}`);
+      return;
+    }
+
     if (isLoss) {
       doCheckTypeWhileExitLoss(message);
     } else {
@@ -185,14 +191,16 @@ const eventHandleMessageFromBlazeChannel = async (e) => {
   }
 };
 
-const run = async () => {
+const run = async (mode) => {
+  isWatch = Boolean(mode);
+
   console.log(`Conectando TELEGRAM`);
 
   await client.connect();
 
   console.log(`Iniciando BOT ⚫️🔴⚪✅💰⛔️`);
 
-  await updateBalanceFromApi();
+  if (!isWatch) await updateBalanceFromApi();
 
   client.addEventHandler(
     eventHandleMessageFromBlazeChannel,
@@ -213,16 +221,20 @@ const run = async () => {
           value: 1,
         },
         {
-          name: "SHOW WALLET",
+          name: "WATCH BOT",
           value: 2,
         },
         {
-          name: "CHECK STATUS",
+          name: "SHOW WALLET",
           value: 3,
         },
         {
-          name: "CHECK STATICS",
+          name: "CHECK STATUS",
           value: 4,
+        },
+        {
+          name: "CHECK STATICS",
+          value: 5,
         },
       ],
     },
@@ -233,16 +245,19 @@ const run = async () => {
       run();
       break;
     case 2:
+      run(true);
+      break;
+    case 3:
       const wall = await blaze.getWallet();
       console.log(wall);
       break;
-    case 3:
+    case 4:
       setInterval(async () => {
         const status = await blaze.getStatusRoulette();
         console.log(status);
       }, 1000);
       break;
-    case 4:
+    case 5:
       setInterval(async () => {
         const status = await blaze.getStatsBets();
         console.log(status);
